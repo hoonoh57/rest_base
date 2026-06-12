@@ -1,0 +1,11 @@
+.env
+venv/
+__pycache__/
+*.pyc
+strategies.json
+experiments.json
+universes.json
+recommendations.json
+conditions.json
+condition_runs.json
+condition_validations.json
