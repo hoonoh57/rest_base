@@ -1,0 +1,382 @@
+<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<title>What You See Is What You Trade! - 차트 시뮬레이터</title>
+<link rel="stylesheet" href="/static/style.css">
+</head><body>
+<div id="left">
+<div class="bar" style="font-weight:700; font-size:14px; color:#2962ff; justify-content:center; border-bottom:2px solid #2962ff;">Simulate What You Trade!</div>
+<div class="section-title">📊 데이터 설정</div>
+<div class="panel-box">
+<div class="frow"><label>종목코드</label><input type="text" id="simCode" value="000660"></div>
+<div class="frow"><label>타임프레임</label><select id="simTF">
+<option value="M">월</option>
+<option value="W">주</option>
+<option value="D">일</option>
+<option value="m1">1분</option>
+<option value="m3">3분</option>
+<option value="m5">5분</option>
+<option value="m15">15분</option>
+<option value="m30">30분</option>
+<option value="t30">30틱</option>
+<option value="t60">60틱</option>
+<option value="t120">120틱</option>
+<option value="t240">240틱</option>
+<option value="t360">360틱</option>
+<option value="t720">720틱</option>
+</select></div>
+<div class="frow"><label>시작일자</label><input type="date" id="simDate"></div>
+<div class="frow"><label>시작시간</label><input type="time" id="simTime" value="09:00:00"></div>
+<button style="background:linear-gradient(135deg, #2962ff, #1565c0); margin-top:4px;" onclick="loadSimulationData()">차트 데이터 다운로드</button>
+</div>
+<div class="section-title">💰 실시간 가상 매매 시뮬레이션</div>
+<div class="panel-box">
+<div class="trade-board">
+<div class="trade-card"><div class="lbl">예수금</div><div class="val" id="trBalance">10,000,000 원</div></div>
+<div class="trade-card"><div class="lbl">평가손익</div><div class="val" id="trPnL">0 원 (0.00%)</div></div>
+<div class="trade-card"><div class="lbl">보유수량</div><div class="val" id="trQty">0 주</div></div>
+<div class="trade-card"><div class="lbl">평균단가</div><div class="val" id="trAvgPrice">0 원</div></div>
+</div>
+<div style="display:flex; gap:8px; margin-top:4px;">
+<button class="btn-buy" style="flex:1;" onclick="executeTrade('buy')">매 수</button>
+<button class="btn-sell" style="flex:1;" onclick="executeTrade('sell')">매 도</button>
+<button class="sim-btn" style="flex:1;" onclick="executeTrade('exit')">전량청산</button>
+</div>
+</div>
+<div class="tbl-wrap">
+<table><thead><tr><th>시각</th><th>구분</th><th>체결가</th><th>수량</th><th>실현손익</th></tr></thead>
+<tbody id="tradeLogBody"></tbody></table>
+</div>
+<div class="section-title">🧪 백테스트 실행</div>
+<div class="panel-box">
+<div class="frow"><label>진입조건식</label><input type="text" id="sEntry" value="close > supertrend" style="width:180px"></div>
+<div class="frow"><label>청산조건식</label><input type="text" id="sExit" value="close < supertrend" style="width:180px"></div>
+<div class="frow"><label>주문수량</label><input type="number" id="sQty" value="100" style="width:100px"></div>
+<button style="background:linear-gradient(135deg, #ab47bc, #8e24aa);" onclick="runBacktest()">조건 백테스트 실행</button>
+<div id="btSummary" style="font-size:11px; color:#26a69a; margin-top:2px;"></div>
+</div>
+</div>
+<div id="right">
+<div class="section-title">Strategy Manager</div>
+<div class="panel-box">
+<div class="action-row">
+<button class="accent-btn" onclick="openStrategyManager()">Open Manager</button>
+<button class="primary-btn" onclick="openStrategyManager('workspace')">Simple Workspace</button>
+<button class="primary-btn" onclick="insertCurrentStrategy()">Insert To Chart</button>
+<button class="good-btn" onclick="runPreciseEvaluation()">Precise PnL</button>
+</div>
+<div class="subtle">Active Strategy: <span id="activeStrategyName">None</span></div>
+<div class="subtle">Live Signal: <span id="strategySignalChip" class="chip neutral">Idle</span></div>
+<div id="strategyStatusText" class="subtle">Open the manager, validate a strategy, insert it into the chart, then use range play to confirm live entry timing.</div>
+<div id="strategyPanelSummary" class="result-box">No strategy result yet.</div>
+</div>
+<div class="tbl-wrap" style="max-height:200px;">
+<table><thead><tr><th>Entry</th><th>Exit</th><th>Bars</th><th>Reason</th><th>Return</th></tr></thead>
+<tbody id="strategyTradesBody"></tbody></table>
+</div>
+<div id="right">
+<div class="bar">
+<span id="chartSymbol" style="font-weight:700; font-size:14px; color:#fff;">종목 데이터 없음</span>
+<label class="tag"><input type="checkbox" id="show_ma" checked onchange="toggleIndicator('ma')"> MA</label>
+<label class="tag"><input type="checkbox" id="show_obv" checked onchange="toggleIndicator('obv')"> OBV</label>
+<label class="tag"><input type="checkbox" id="show_macd" checked onchange="toggleIndicator('macd')"> MACD</label>
+<label class="tag"><input type="checkbox" id="show_jma" checked onchange="toggleIndicator('jma')"> JMA</label>
+<label class="tag"><input type="checkbox" id="show_supertrend" checked onchange="toggleIndicator('supertrend')"> Supertrend</label>
+<label class="tag"><input type="checkbox" id="show_vwma" checked onchange="toggleIndicator('vwma')"> VWMA</label>
+<label class="tag"><input type="checkbox" id="show_zigzag" checked onchange="toggleIndicator('zigzag')"> 🔵 ZigZag(Non-Repaint)</label>
+<label class="tag"><input type="checkbox" id="show_fractals" checked onchange="toggleIndicator('fractals')"> 📈 프랙탈추세선</label>
+<label class="tag"><input type="checkbox" id="show_lr" onchange="toggleIndicator('lr')"> 회귀채널</label>
+<div class="sim-controls">
+<button class="sim-btn" id="rangeBtn" onclick="toggleRangeSelect()">구간선택</button>
+<button class="sim-btn" onclick="clearRange()">구간해제</button>
+<button class="sim-btn" onclick="simGoStart()">처음</button>
+<button class="sim-btn" onclick="simPrev()">이전</button>
+<button class="sim-btn" id="playBtn" onclick="simTogglePlay()">플레이</button>
+<button class="sim-btn" onclick="simNext()">다음</button>
+<button class="sim-btn" onclick="simGoEnd()">마지막</button>
+<button class="sim-btn" onclick="viewAllCandles()">전체보기</button>
+<select id="simSpeed" style="width:80px">
+<option value="100">0.1초</option>
+<option value="200" selected>0.2초</option>
+<option value="500">0.5초</option>
+<option value="1000">1초</option>
+<option value="2000">2초</option>
+</select>
+</div>
+</div>
+<div id="chart"></div>
+</div>
+<div id="strategyDlg" class="dlg"><div class="dlgbox">
+<div class="dlghead">
+  <div>
+    <div style="font-size:16px;font-weight:700;color:#fff;">Strategy Manager</div>
+    <div class="subtle">Create, validate, save, insert, and evaluate strategies for the current simulation session.</div>
+  </div>
+  <button class="soft-btn" onclick="closeStrategyManager()">Close</button>
+</div>
+<div class="dlgtabs">
+  <button id="tabBtn_strategy" class="tabbtn active" onclick="setManagerTab('strategy')">전략작성</button>
+  <button id="tabBtn_workspace" class="tabbtn" onclick="setManagerTab('workspace')">간편작업</button>
+  <button id="tabBtn_discovery" class="tabbtn" onclick="setManagerTab('discovery')">후보발굴</button>
+  <button id="tabBtn_automation" class="tabbtn" onclick="setManagerTab('automation')">자동탐색</button>
+  <button id="tabBtn_help" class="tabbtn" onclick="setManagerTab('help')">도움말</button>
+</div>
+<div class="dlgbody">
+  <div id="llmWorkspaceCard" class="dlgcard" data-tab-group="workspace" style="grid-column:1 / span 2;">
+    <div class="card-head">
+      <h4>LLM Workspace</h4>
+      <button class="help-btn" onclick="showHelp('llm_workspace')">?</button>
+    </div>
+    <div class="workspace-shell">
+      <div class="workspace-nav">
+        <button id="llmTaskBtn_condition_search" class="workspace-nav-btn active" onclick="setLLMTask('condition_search')">조건검색</button>
+        <button id="llmTaskBtn_performance_validation" class="workspace-nav-btn" onclick="setLLMTask('performance_validation')">성과검증</button>
+        <button id="llmTaskBtn_top_riser_study" class="workspace-nav-btn" onclick="setLLMTask('top_riser_study')">상승요인분석</button>
+        <button id="llmTaskBtn_stock_recommendation" class="workspace-nav-btn" onclick="setLLMTask('stock_recommendation')">종목추천</button>
+        <div class="workspace-hint" id="llmMenuHint" style="margin-top:8px;">자연어로 작업을 설명하고, 생성된 프롬프트를 외부 LLM에 붙여 넣은 뒤 JSON만 다시 가져오면 됩니다.</div>
+      </div>
+      <div class="workspace-main">
+        <div class="workspace-grid">
+          <div class="workspace-panel">
+            <h4 id="llmTaskTitle">조건검색</h4>
+            <div class="subtle" id="llmTaskSubtle" style="margin-bottom:10px;">찾고 싶은 종목 구조를 자연어로 설명하면 JSON 초안을 만들기 위한 프롬프트를 생성합니다.</div>
+            <div class="preset-row" id="llmPresetButtons"></div>
+            <textarea id="llmUserPrompt" class="workspace-textarea" placeholder="예: 지난 20일 일봉 박스권 이후, 오늘 5분봉 기준봉이 나오고 상단 돌파 초입인 종목을 찾아줘."></textarea>
+            <div class="workspace-actions">
+              <button class="primary-btn" onclick="generateLLMPrompt()">프롬프트 생성</button>
+              <button class="soft-btn" onclick="clearLLMUserPrompt()">초기화</button>
+            </div>
+          </div>
+          <div class="workspace-panel">
+            <h4>외부 LLM용 프롬프트</h4>
+            <div class="subtle" style="margin-bottom:10px;">아래 내용을 복사해서 외부 LLM에 넣고, 반드시 JSON만 반환받아 오른쪽 아래 입력란에 붙여 넣으세요.</div>
+            <textarea id="llmGeneratedPrompt" class="workspace-textarea mono" placeholder="프롬프트 생성 버튼을 누르면 여기에 외부 LLM용 프롬프트가 생성됩니다."></textarea>
+            <div class="workspace-actions">
+              <button class="soft-btn" onclick="copyLLMGeneratedPrompt()">프롬프트 복사</button>
+              <button class="good-btn" onclick="showHelp('llm_manual_flow')">사용순서</button>
+            </div>
+          </div>
+        </div>
+        <div class="workspace-grid">
+          <div class="workspace-panel">
+            <h4>LLM 반환 JSON</h4>
+            <div class="subtle" style="margin-bottom:10px;">설명 없이 JSON만 붙여 넣으세요. 검증 후 기존 엔진에 연결됩니다.</div>
+            <textarea id="llmJsonInput" class="workspace-textarea mono" placeholder='{"task":"condition_search","condition":{...}}'></textarea>
+            <div class="workspace-actions">
+              <button class="primary-btn" onclick="validateLLMJson()">JSON 검증</button>
+              <button class="accent-btn" onclick="applyLLMJson(false)">폼 반영</button>
+              <button class="good-btn" onclick="applyLLMJson(true)">검증 후 실행</button>
+              <button class="soft-btn" onclick="openAdvancedFromLLMTask()">고급 화면 열기</button>
+            </div>
+            <div id="llmJsonSummary" class="result-box" style="margin-top:10px;">아직 JSON이 없습니다.</div>
+            <div id="llmJsonWarnings" class="result-box" style="margin-top:10px;white-space:pre-line;">의미 검증 경고가 여기에 표시됩니다.</div>
+          </div>
+          <div class="workspace-panel">
+            <h4>작업 가이드</h4>
+            <div id="llmTaskGuide" class="workspace-hint"></div>
+            <div class="workspace-kv" style="margin-top:12px;">
+              <div>현재 작업</div><div id="llmTaskCurrent">조건검색</div>
+              <div>실행 대상</div><div id="llmTaskTarget">Condition Search 폼</div>
+              <div>실행 결과</div><div id="llmTaskResult">JSON 검증 후 기존 검증 엔진으로 연결됩니다.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="strategyHelpCard" class="dlgcard help-card" data-tab-group="help">
+    <div class="card-head">
+      <h4>Guide & Help</h4>
+      <button class="help-btn" onclick="showHelp('overview')">?</button>
+    </div>
+    <div id="strategyHelpBody" class="subtle" style="white-space:pre-line;">이 화면은 전략 작성, 후보군 발굴, 자동 반복 탐색을 나누어 쓰도록 구성됩니다.</div>
+  </div>
+  <div id="strategyDefinitionCard" class="dlgcard" data-tab-group="strategy">
+    <div class="card-head"><h4>Strategy Definition</h4><button class="help-btn" onclick="showHelp('strategy_definition')">?</button></div>
+    <input type="hidden" id="smId">
+    <input type="hidden" id="smParentId">
+    <input type="hidden" id="smParentVersion">
+    <div class="frow"><label>Saved</label><select id="smList" onchange="selectStrategy(this.value)" style="width:220px"></select></div>
+    <div class="frow"><label>Name</label><input id="smName" type="text" style="width:220px" value="WISI_Base"></div>
+    <div class="frow"><label>Version</label><input id="smVersion" type="text" style="width:120px" value="v0.2.0"></div>
+    <div class="frow"><label>Stage</label><select id="smStage" style="width:160px"><option value="draft">draft</option><option value="candidate">candidate</option><option value="promoted">promoted</option><option value="archived">archived</option></select></div>
+    <div class="frow"><label>Code</label><input id="smCode" type="text" style="width:120px" value="000660"></div>
+    <div class="frow"><label>Benchmark</label><input id="smBenchmarkId" type="text" style="width:220px" placeholder="baseline strategy id"></div>
+    <div class="frow"><label>Entry</label><input id="smEntry" class="mono" type="text" style="width:100%" value="(zigzag_turn_up or zigzag_trend > 0) and close > supertrend"></div>
+    <div class="frow"><label>Exit</label><input id="smExit" class="mono" type="text" style="width:100%" value="zigzag_turn_down or zigzag_trend < 0 or close < supertrend"></div>
+    <div class="frow"><label>Qty</label><input id="smQty" type="number" style="width:100px" value="100"></div>
+    <div class="frow"><label>Stop %</label><input id="smStop" type="number" step="any" style="width:100px" value="0"></div>
+    <div class="frow"><label>Take %</label><input id="smTake" type="number" step="any" style="width:100px" value="0"></div>
+    <div class="frow" style="align-items:flex-start;"><label>Notes</label><textarea id="smNotes" style="width:100%;height:70px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#fff;padding:6px;"></textarea></div>
+    <h4 style="margin-top:14px;">Parameter Overrides</h4>
+    <div id="strategyParamFields" class="param-grid"></div>
+  </div>
+  <div id="managerRightCol" style="display:flex;flex-direction:column;gap:16px;">
+    <div class="dlgcard" data-tab-group="strategy">
+      <div class="card-head"><h4>Validation</h4><button class="help-btn" onclick="showHelp('validation')">?</button></div>
+      <div class="subtle">Available trend gates now include <span class="mono">zigzag_trend</span>, <span class="mono">zigzag_turn_up</span>, and <span class="mono">zigzag_turn_down</span>. For exact crosses, use explicit previous values such as <span class="mono">prev_macd &lt;= prev_macd_signal</span>.</div>
+      <div id="strategyValidateResult" class="result-box" style="margin-top:10px;">No validation yet.</div>
+    </div>
+    <div class="dlgcard" data-tab-group="discovery">
+      <div class="card-head"><h4>Condition Search</h4><button class="help-btn" onclick="showHelp('condition_builder')">?</button></div>
+      <input type="hidden" id="cvId">
+      <input type="hidden" id="cvParentId">
+      <input type="hidden" id="cvParentVersion">
+      <div class="frow"><label>Saved</label><select id="cvList" onchange="selectCondition(this.value)" style="width:220px"></select></div>
+      <div class="frow"><label>Name</label><input id="cvName" type="text" style="width:220px" value="박스권_기준봉_상승전환"></div>
+      <div class="frow"><label>Version</label><input id="cvVersion" type="text" style="width:120px" value="v0.1.0"></div>
+      <div class="frow"><label>Stage</label><select id="cvStage" style="width:160px"><option value="draft">draft</option><option value="candidate">candidate</option><option value="promoted">promoted</option><option value="archived">archived</option></select></div>
+      <div class="frow"><label>TF</label><input id="cvTF" type="text" style="width:120px" value="m5"></div>
+      <div class="frow"><label>Expr</label><input id="cvExpr" class="mono" type="text" style="width:100%" value="A and B and C"></div>
+      <div class="frow"><label>Desc</label><input id="cvDesc" type="text" style="width:100%" value="박스권 압축 + 기준봉 + ZigZag 상승전환"></div>
+      <div class="frow" style="align-items:flex-start;"><label>Rows JSON</label><textarea id="cvRows" class="mono" style="width:100%;height:160px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#fff;padding:6px;"></textarea></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="soft-btn" onclick="newConditionForm()">New</button>
+        <button class="soft-btn" onclick="cloneConditionForm()">Clone New Ver</button>
+        <button class="primary-btn" onclick="validateConditionForm()">Validate</button>
+        <button class="accent-btn" onclick="saveConditionForm()">Save</button>
+        <button class="danger-btn" onclick="deleteConditionForm()">Delete</button>
+      </div>
+      <div id="conditionValidateResult" class="result-box" style="margin-top:10px;">No condition validation yet.</div>
+    </div>
+    <div class="dlgcard" data-tab-group="discovery">
+      <div class="card-head"><h4>Condition Validation</h4><button class="help-btn" onclick="showHelp('condition_validation')">?</button></div>
+      <div class="frow"><label>Date</label><input id="condSearchDate" type="date" style="width:160px"></div>
+      <div class="frow"><label>Time</label><input id="condSearchTime" type="time" style="width:120px" value="09:10"></div>
+      <div class="frow"><label>TF</label><input id="condSearchTF" type="text" style="width:120px" value="m5"></div>
+      <div class="frow"><label>Bars</label><input id="condBars" type="number" style="width:120px" value="500"></div>
+      <div class="frow"><label>Top N</label><input id="condTopN" type="number" style="width:120px" value="15"></div>
+      <div class="frow"><label>Symbols</label><input id="condSymbols" type="text" style="width:100%" placeholder="empty = latest universe or current code"></div>
+      <div class="frow"><label>Strategy</label><select id="condStrategyId" style="width:220px"></select></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="primary-btn" onclick="runConditionValidation()">Run Validation</button>
+        <button class="soft-btn" onclick="applyConditionValidationToWorker()">Use Top Codes</button>
+      </div>
+      <div id="conditionValidationSummary" class="result-box" style="margin-top:10px;">No condition validation yet.</div>
+      <div class="compact-table" style="margin-top:10px;max-height:200px;">
+        <table>
+          <thead><tr><th>Code</th><th>Name</th><th>Score</th><th>최고수익률</th><th>전략수익률</th><th>승률</th><th>거래수</th></tr></thead>
+          <tbody id="conditionValidationBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dlgcard" data-tab-group="discovery">
+      <div class="card-head"><h4>Top Riser Study</h4><button class="help-btn" onclick="showHelp('top_riser_study')">?</button></div>
+      <div class="frow"><label>Source Date</label><input id="trsSourceDate" type="date" style="width:160px"></div>
+      <div class="frow"><label>Source Top N</label><input id="trsTopN" type="number" style="width:120px" value="10"></div>
+      <div class="frow"><label>Target Date</label><input id="trsTargetDate" type="date" style="width:160px"></div>
+      <div class="frow"><label>Candidate Limit</label><input id="trsCandidateLimit" type="number" style="width:120px" value="10"></div>
+      <div class="frow"><label>Symbols</label><input id="trsSymbols" type="text" style="width:100%" placeholder="empty = target date universe snapshot"></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="primary-btn" onclick="runTopRiserStudy()">Analyze & Validate</button>
+        <button class="soft-btn" onclick="applyTopRiserStudyToWorker()">Use Top Codes</button>
+      </div>
+      <div id="topRiserStudySummary" class="result-box" style="margin-top:10px;">No top riser study yet.</div>
+      <div class="compact-table" style="margin-top:10px;max-height:220px;">
+        <table>
+          <thead><tr><th>Code</th><th>Name</th><th>Score</th><th>등락률</th><th>OBV</th><th>MACD</th><th>VolRatio</th><th>Box%</th></tr></thead>
+          <tbody id="topRiserStudyBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dlgcard" data-tab-group="discovery">
+      <div class="card-head"><h4>Universe Builder</h4><button class="help-btn" onclick="showHelp('universe')">?</button></div>
+      <div class="frow"><label>Limit Each</label><input id="universeLimitEach" type="number" style="width:120px" value="30"></div>
+      <div class="frow"><label>Top N</label><input id="universeTopN" type="number" style="width:120px" value="20"></div>
+      <div class="frow"><label>Trade Value</label><input id="universeUseTV" type="checkbox" checked style="width:auto"></div>
+      <div class="frow"><label>Change Rate</label><input id="universeUseCR" type="checkbox" checked style="width:auto"></div>
+      <div class="frow"><label>Analyze Daily</label><input id="universeAnalyzeDaily" type="checkbox" checked style="width:auto"></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="primary-btn" onclick="runUniverseBuilder()">Build Universe</button>
+        <button class="soft-btn" onclick="applyUniverseToWorker()">Use In Worker</button>
+      </div>
+      <div id="universeSummary" class="result-box" style="margin-top:10px;">No universe snapshot yet.</div>
+      <div class="compact-table" style="margin-top:10px;max-height:180px;">
+        <table>
+          <thead><tr><th>Code</th><th>Name</th><th>Tags</th><th>Score</th><th>Chg%</th></tr></thead>
+          <tbody id="universeBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dlgcard" data-tab-group="discovery">
+      <div class="card-head"><h4>Recommendation Builder</h4><button class="help-btn" onclick="showHelp('recommendation')">?</button></div>
+      <div class="frow"><label>TFs</label><input id="recoTFs" type="text" style="width:220px" value="t360,t720"></div>
+      <div class="frow"><label>Top N</label><input id="recoTopN" type="number" style="width:120px" value="10"></div>
+      <div class="frow"><label>Universe Limit</label><input id="recoUniverseLimit" type="number" style="width:120px" value="20"></div>
+      <div class="frow"><label>Bars</label><input id="recoBars" type="number" style="width:120px" value="1000"></div>
+      <div class="frow"><label>Window 1</label><input id="recoWindow1" type="number" style="width:120px" value="120"></div>
+      <div class="frow"><label>Window 2</label><input id="recoWindow2" type="number" style="width:120px" value="240"></div>
+      <div class="frow"><label>Window 3</label><input id="recoWindow3" type="number" style="width:120px" value="480"></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="primary-btn" onclick="runRecommendationBuilder()">Build Recommendations</button>
+        <button class="soft-btn" onclick="applyRecommendationsToWorker()">Use In Worker</button>
+      </div>
+      <div id="recommendationSummary" class="result-box" style="margin-top:10px;">No recommendation snapshot yet.</div>
+      <div class="compact-table" style="margin-top:10px;max-height:180px;">
+        <table>
+          <thead><tr><th>Code</th><th>Reco</th><th>Leader</th><th>Strategy</th><th>Win</th><th>전략수익률</th></tr></thead>
+          <tbody id="recommendationBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dlgcard" data-tab-group="strategy">
+      <div class="card-head"><h4>Evaluation Summary</h4><button class="help-btn" onclick="showHelp('evaluation')">?</button></div>
+      <div id="strategyEvalSummary" class="result-box">No evaluation yet.</div>
+      <div class="compact-table" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Entry</th><th>Exit</th><th>Bars</th><th>Reason</th><th>Return</th></tr></thead>
+          <tbody id="strategyEvalTrades"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="dlgcard" data-tab-group="strategy">
+      <div class="card-head"><h4>Version Compare</h4><button class="help-btn" onclick="showHelp('compare')">?</button></div>
+      <div class="frow"><label>Baseline</label><select id="cmpBase" style="width:220px"></select></div>
+      <div class="frow"><label>Candidate</label><select id="cmpCand" style="width:220px"></select></div>
+      <div id="strategyCompareSummary" class="result-box" style="margin-top:10px;">No comparison yet.</div>
+    </div>
+    <div class="dlgcard" data-tab-group="automation">
+      <div class="card-head"><h4>Lab Worker</h4><button class="help-btn" onclick="showHelp('worker')">?</button></div>
+      <div class="frow"><label>Symbols</label><input id="workerSymbols" type="text" style="width:220px" value="000660"></div>
+      <div class="frow"><label>Timeframes</label><input id="workerTFs" type="text" style="width:220px" value="t360"></div>
+      <div class="frow"><label>Windows</label><input id="workerWindows" type="text" style="width:220px" value="120,240,480"></div>
+      <div class="frow"><label>Bars</label><input id="workerBars" type="number" style="width:120px" value="1000"></div>
+      <div class="frow"><label>Interval Sec</label><input id="workerIntervalSec" type="number" style="width:120px" value="300"></div>
+      <div class="frow"><label>Save Top N</label><input id="workerTopN" type="number" style="width:120px" value="3"></div>
+      <div class="frow"><label>Auto Candidate</label><input id="workerAutoCandidate" type="checkbox" checked style="width:auto"></div>
+      <div class="action-row" style="margin-top:10px;">
+        <button class="primary-btn" onclick="startLabWorker(true)">Run Once</button>
+        <button class="accent-btn" onclick="startLabWorker(false)">Start Loop</button>
+        <button class="danger-btn" onclick="stopLabWorker()">Stop</button>
+      </div>
+      <div id="workerStatusSummary" class="result-box" style="margin-top:10px;">Worker idle.</div>
+    </div>
+    <div class="dlgcard" data-tab-group="automation">
+      <div class="card-head"><h4>Lab Snapshot</h4><button class="help-btn" onclick="showHelp('snapshot')">?</button></div>
+      <div id="strategyLabSummary" class="result-box">No lab snapshot yet.</div>
+      <div class="compact-table" style="margin-top:10px;max-height:160px;">
+        <table>
+          <thead><tr><th>Stage</th><th>Version</th><th>Score</th><th>Total</th><th>Win</th></tr></thead>
+          <tbody id="strategyExperimentBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="strategyDlgFoot" class="dlgfoot">
+  <button class="soft-btn" data-footer-group="strategy" onclick="newStrategyForm()">New</button>
+  <button class="soft-btn" data-footer-group="strategy" onclick="cloneStrategyForm()">Clone New Ver</button>
+  <button class="primary-btn" data-footer-group="strategy" onclick="validateStrategyForm()">Validate</button>
+  <button class="accent-btn" data-footer-group="strategy" onclick="saveStrategyForm()">Save</button>
+  <button class="good-btn" data-footer-group="strategy" onclick="promoteStrategyForm()">Promote</button>
+  <button class="danger-btn" data-footer-group="strategy" onclick="deleteStrategyForm()">Delete</button>
+  <button class="primary-btn" data-footer-group="strategy" onclick="insertStrategyToChart()">Insert To Chart</button>
+  <button class="good-btn" data-footer-group="strategy" onclick="runPreciseEvaluation()">Precise PnL</button>
+  <button class="good-btn" data-footer-group="strategy" onclick="compareSelectedStrategies()">A/B Compare</button>
+  <button class="accent-btn" data-footer-group="automation" onclick="runBatchSearch()">Batch Search</button>
+</div>
+</div></div>
+<script src="https://unpkg.com/lightweight-charts@5.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="/static/app.js"></script>
+</body></html>
