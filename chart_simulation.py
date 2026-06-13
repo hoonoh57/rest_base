@@ -330,6 +330,10 @@ def validate_expression(expr):
             "prev_zigzag_trend": -1,
             "zigzag_turn_up": True,
             "zigzag_turn_down": False,
+            "trendline": 995.0,
+            "prev_trendline": 994.0,
+            "trendline_slope": 0.5,
+            "prev_trendline_slope": 0.4,
         }
         dummy_funcs = {
             "crossover": lambda a, b: a > b,
@@ -1882,16 +1886,18 @@ def evaluate_strategy_status(rest, settings, session, strategy, idx):
         vols = [r["volume"] for r in candles]
         highs = [r["high"] for r in candles]
         lows = [r["low"] for r in candles]
-        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down = _series_vars(closes, vols, highs, lows, settings.params)
+        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope = _series_vars(closes, vols, highs, lows, settings.params)
         prev_ctx = {}
         if idx > 0:
             prev_ctx = engine._ctx_at(
                 idx - 1, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-                zigzag_trend, zigzag_turn_up, zigzag_turn_down, {}
+                zigzag_trend, zigzag_turn_up, zigzag_turn_down, {},
+                trendline, trendline_slope
             )
         cur_ctx = engine._ctx_at(
             idx, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-            zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev_ctx
+            zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev_ctx,
+            trendline, trendline_slope
         )
         funcs = engine._funcs(cur_ctx, prev_ctx)
         entry_hit = bool(strategy.get("entry_expr")) and bool(SafeEval(cur_ctx, funcs).eval(strategy["entry_expr"]))

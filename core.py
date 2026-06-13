@@ -1103,6 +1103,31 @@ class SafeEval:
             return n.value
         raise ValueError("허용 안 된 구문: " + type(n).__name__)
 
+def compute_fractal_trendline(highs, lows, closes, left=2, right=2):
+    """프랙탈 저점 2개를 이어 상승 지지선을 긋고 각 봉까지 연장. 미래 미참조(right봉 지연)."""
+    lows = np.asarray(lows, dtype=float)
+    n = len(lows)
+    trendline = np.full(n, np.nan)
+    slope_arr = np.full(n, np.nan)
+    if n < left + right + 2:
+        return trendline, slope_arr
+    pivots = []
+    for i in range(left, n - right):
+        win = lows[i - left:i + right + 1]
+        if lows[i] == win.min() and np.sum(win == lows[i]) == 1:
+            pivots.append((i, float(lows[i])))
+    for j in range(n):
+        confirmed = [(idx, val) for (idx, val) in pivots if idx + right <= j]
+        if len(confirmed) < 2:
+            continue
+        (i1, v1), (i2, v2) = confirmed[-2], confirmed[-1]
+        if i2 == i1:
+            continue
+        slope = (v2 - v1) / (i2 - i1)
+        trendline[j] = v2 + slope * (j - i2)
+        slope_arr[j] = slope
+    return trendline, slope_arr
+
 
 def _series_vars(closes, vols, highs, lows, p):
     ma = {per: [None] * len(closes) for per in p["ma_periods"]}
@@ -1119,9 +1144,9 @@ def _series_vars(closes, vols, highs, lows, p):
     jma, _ = compute_jma(closes, p["jma_length"], p["jma_phase"], p["jma_power"])
     vwma = compute_vwma(closes, vols, p["vwma_length"])
     zigzag_trend, zigzag_turn_up, zigzag_turn_down = compute_zigzag_state_series(highs, lows, closes, 5.0)
-    
-    return ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down
+    trendline, trendline_slope = compute_fractal_trendline(highs, lows, closes)
 
+    return ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope
 
 class StrategyEngine:
     """전략 = {entry_expr, exit_expr, qty, stop_pct, take_pct}"""
@@ -1130,7 +1155,9 @@ class StrategyEngine:
         self.settings = settings
 
     def _ctx_at(self, i, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-                zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev):
+                zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev,
+                trendline=None, trendline_slope=None):
+
         p = self.settings.params
         per = p["ma_periods"]
 
@@ -1157,6 +1184,9 @@ class StrategyEngine:
         v["zigzag_trend"] = int(zigzag_trend[i]) if i < len(zigzag_trend) else 0
         v["zigzag_turn_up"] = bool(zigzag_turn_up[i]) if i < len(zigzag_turn_up) else False
         v["zigzag_turn_down"] = bool(zigzag_turn_down[i]) if i < len(zigzag_turn_down) else False
+        v["trendline"] = float(trendline[i]) if trendline is not None and i < len(trendline) and not np.isnan(trendline[i]) else None
+        v["trendline_slope"] = float(trendline_slope[i]) if trendline_slope is not None and i < len(trendline_slope) and not np.isnan(trendline_slope[i]) else None
+
         if prev:
             for key, value in prev.items():
                 if key.startswith("prev_"):
@@ -1183,7 +1213,8 @@ class StrategyEngine:
         vols = [r["volume"] for r in ohlcv]
         highs = [r["high"] for r in ohlcv]
         lows = [r["low"] for r in ohlcv]
-        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down = _series_vars(closes, vols, highs, lows, p)
+        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope = _series_vars(closes, vols, highs, lows, p)
+
         intraday = tf.startswith("m") or tf.startswith("t")
         times = [RankingEngine._fmt_time(r["date"], intraday) for r in ohlcv]
         times = deduplicate_times(times, intraday)
@@ -1194,7 +1225,9 @@ class StrategyEngine:
         entry_i = 0
         for i in range(60, len(closes)):
             v = self._ctx_at(i, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-                             zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev)
+                             zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev,
+                             trendline, trendline_slope)
+
             funcs = self._funcs(v, prev)
             px = closes[i]
             try:
