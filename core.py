@@ -943,6 +943,20 @@ class RankingEngine:
         intraday = tf.startswith("m") or tf.startswith("t")
         times = [self._fmt_time(r["date"], intraday) for r in ohlcv]
         times = deduplicate_times(times, intraday)
+        # ── 마지막 거래일만 평가 + 하루 진입 횟수 제한 ──
+        last_day_only = strategy.get("last_day_only", True)
+        max_trades_per_day = int(strategy.get("max_trades_per_day", 3))
+        day_keys = [str(r["date"])[:8] for r in ohlcv]
+        eval_start = 60
+        if last_day_only and day_keys:
+            last_key = day_keys[-1]
+            for _k in range(len(day_keys)):
+                if day_keys[_k] == last_key:
+                    eval_start = _k
+                    break
+        entries_today = 0
+        daily_target = float(strategy.get("daily_target_pct", 10.0)) / 100.0
+        day_realized = 0.0
 
         candles, volumes = [], []
         for i, r in enumerate(ohlcv):
@@ -1024,6 +1038,20 @@ class RankingEngine:
         intraday = tf.startswith("m") or tf.startswith("t")
         times = [self._fmt_time(r["date"], intraday) for r in raw]
         times = deduplicate_times(times, intraday)
+        # ── 마지막 거래일만 평가 + 하루 진입 횟수 제한 ──
+        last_day_only = strategy.get("last_day_only", True)
+        max_trades_per_day = int(strategy.get("max_trades_per_day", 3))
+        day_keys = [str(r["date"])[:8] for r in ohlcv]
+        eval_start = 60
+        if last_day_only and day_keys:
+            last_key = day_keys[-1]
+            for _k in range(len(day_keys)):
+                if day_keys[_k] == last_key:
+                    eval_start = _k
+                    break
+        entries_today = 0
+        daily_target = float(strategy.get("daily_target_pct", 10.0)) / 100.0
+        day_realized = 0.0
         
         candles = []
         for i, r in enumerate(raw):
@@ -1142,12 +1170,13 @@ def _series_vars(closes, vols, highs, lows, p):
     
     supertrend, trend_up = compute_supertrend(highs, lows, closes, p["supertrend_period"], p["supertrend_multiplier"])
     supertrend_trend = [1 if t else -1 for t in trend_up]
-    jma, _ = compute_jma(closes, p["jma_length"], p["jma_phase"], p["jma_power"])
+    jma, jma_trend = compute_jma(closes, p["jma_length"], p["jma_phase"], p["jma_power"])
     vwma = compute_vwma(closes, vols, p["vwma_length"])
+    vwma_trend = [0] + [(1 if vwma[k] > vwma[k-1] else (-1 if vwma[k] < vwma[k-1] else 0)) for k in range(1, len(vwma))]
     zigzag_trend, zigzag_turn_up, zigzag_turn_down = compute_zigzag_state_series(highs, lows, closes, 5.0)
     trendline, trendline_slope = compute_fractal_trendline(highs, lows, closes)
 
-    return ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope
+    return ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope, jma_trend, vwma_trend
 
 class StrategyEngine:
     """전략 = {entry_expr, exit_expr, qty, stop_pct, take_pct}"""
@@ -1157,7 +1186,7 @@ class StrategyEngine:
 
     def _ctx_at(self, i, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
                 zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev,
-                trendline=None, trendline_slope=None):
+                trendline=None, trendline_slope=None, jma_trend=None, vwma_trend=None):
 
         p = self.settings.params
         per = p["ma_periods"]
@@ -1182,6 +1211,8 @@ class StrategyEngine:
         v["supertrend_trend"] = int(supertrend_trend[i])
         v["jma"] = float(jma[i]) if not np.isnan(jma[i]) else None
         v["vwma"] = float(vwma[i]) if not np.isnan(vwma[i]) else None
+        v["jma_trend"] = int(jma_trend[i]) if jma_trend is not None and i < len(jma_trend) else 0
+        v["vwma_trend"] = int(vwma_trend[i]) if vwma_trend is not None and i < len(vwma_trend) else 0
         v["zigzag_trend"] = int(zigzag_trend[i]) if i < len(zigzag_trend) else 0
         v["zigzag_turn_up"] = bool(zigzag_turn_up[i]) if i < len(zigzag_turn_up) else False
         v["zigzag_turn_down"] = bool(zigzag_turn_down[i]) if i < len(zigzag_turn_down) else False
@@ -1210,27 +1241,43 @@ class StrategyEngine:
         vols = [r["volume"] for r in ohlcv]
         highs = [r["high"] for r in ohlcv]
         lows = [r["low"] for r in ohlcv]
-        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope = _series_vars(closes, vols, highs, lows, p)
+        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope, jma_trend, vwma_trend = _series_vars(closes, vols, highs, lows, p)
 
         intraday = tf.startswith("m") or tf.startswith("t")
         times = [RankingEngine._fmt_time(r["date"], intraday) for r in ohlcv]
         times = deduplicate_times(times, intraday)
+        # ── 마지막 거래일만 평가 + 하루 진입 횟수 제한 ──
+        last_day_only = strategy.get("last_day_only", True)
+        max_trades_per_day = int(strategy.get("max_trades_per_day", 3))
+        day_keys = [str(r["date"])[:8] for r in ohlcv]
+        eval_start = 60
+        if last_day_only and day_keys:
+            last_key = day_keys[-1]
+            for _k in range(len(day_keys)):
+                if day_keys[_k] == last_key:
+                    eval_start = _k
+                    break
+        entries_today = 0
+        daily_target = float(strategy.get("daily_target_pct", 10.0)) / 100.0
+        day_realized = 0.0
 
         pos, entry_px = 0, 0.0
         trades, markers, equity = [], [], 1.0
         prev = {}
         entry_i = 0
-        for i in range(60, len(closes)):
+        loop_start = max(60, eval_start - 1)
+        for i in range(loop_start, len(closes)):
             v = self._ctx_at(i, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
                              zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev,
-                             trendline, trendline_slope)
+                             trendline, trendline_slope, jma_trend, vwma_trend)
 
             funcs = self._funcs(v, prev)
             px = closes[i]
             try:
-                if pos == 0 and SafeEval(v, funcs).eval(strategy["entry_expr"]):
+                if pos == 0 and i >= eval_start and entries_today < max_trades_per_day and day_realized < daily_target and SafeEval(v, funcs).eval(strategy["entry_expr"]):
                     pos, entry_px = 1, px
                     entry_i = i
+                    entries_today += 1
                     markers.append({"time": times[i], "position": "belowBar",
                                     "color": "#26a69a", "shape": "arrowUp", "text": "BUY"})
                 elif pos == 1:
@@ -1240,6 +1287,7 @@ class StrategyEngine:
                     if hs or ht or se:
                         ret = (px / entry_px) - 1 - fee * 2
                         equity *= (1 + ret)
+                        day_realized += ret
                         trades.append({"entry": entry_px, "exit": px, "ret": round(ret * 100, 2),
                                        "reason": "stop" if hs else ("take" if ht else "signal"),
                                        "entry_time": times[entry_i],
@@ -1251,6 +1299,21 @@ class StrategyEngine:
             except Exception as e:
                 return {"error": "표현식 오류: " + str(e)}
             prev = v
+
+        # ── 루프 종료 시 미청산 포지션 강제청산 (마지막 봉 종가) ──
+        if pos == 1:
+            i = len(closes) - 1
+            px = closes[i]
+            ret = (px / entry_px) - 1 - fee * 2
+            equity *= (1 + ret)
+            trades.append({"entry": entry_px, "exit": px, "ret": round(ret * 100, 2),
+                           "reason": "eod",
+                           "entry_time": times[entry_i],
+                           "exit_time": times[i],
+                           "bars": i - entry_i})
+            markers.append({"time": times[i], "position": "aboveBar",
+                            "color": "#ef5350", "shape": "arrowDown", "text": "SELL"})
+            pos = 0
         wins = [t for t in trades if t["ret"] > 0]
         return {"code": code, "tf": tf, "trades": trades, "markers": markers,
                 "n_trades": len(trades),

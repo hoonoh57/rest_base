@@ -322,6 +322,10 @@ def validate_expression(expr):
             "prev_supertrend": 994.0,
             "supertrend_trend": 1,
             "prev_supertrend_trend": -1,
+            "jma_trend": 1,
+            "prev_jma_trend": -1,
+            "vwma_trend": 1,
+            "prev_vwma_trend": -1,
             "jma": 1001.0,
             "prev_jma": 999.0,
             "vwma": 998.0,
@@ -1887,17 +1891,17 @@ def evaluate_strategy_status(rest, settings, session, strategy, idx):
         vols = [r["volume"] for r in candles]
         highs = [r["high"] for r in candles]
         lows = [r["low"] for r in candles]
-        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope = _series_vars(closes, vols, highs, lows, settings.params)
+        ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma, zigzag_trend, zigzag_turn_up, zigzag_turn_down, trendline, trendline_slope, jma_trend, vwma_trend = _series_vars(closes, vols, highs, lows, settings.params)
         prev_ctx = {}
         if idx > 0:
             prev_ctx = engine._ctx_at(
                 idx - 1, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-                zigzag_trend, zigzag_turn_up, zigzag_turn_down, {},
+                zigzag_trend, zigzag_turn_up, zigzag_turn_down, {}, trendline, trendline_slope, jma_trend, vwma_trend,
                 trendline, trendline_slope
             )
         cur_ctx = engine._ctx_at(
             idx, closes, ma, obv, obv_sig, macd, supertrend, supertrend_trend, jma, vwma,
-            zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev_ctx,
+            zigzag_trend, zigzag_turn_up, zigzag_turn_down, prev_ctx, trendline, trendline_slope, jma_trend, vwma_trend,
             trendline, trendline_slope
         )
         funcs = engine._funcs(cur_ctx, prev_ctx)
