@@ -1,4 +1,4 @@
-// 서버에서 /api/bootstrap 으로 주입되는 값 (window.onload 직전에 채워짐)
+﻿// 서버에서 /api/bootstrap 으로 주입되는 값 (window.onload 직전에 채워짐)
 var activeParams = {};
 var conditionRowSample = [];
 
@@ -2216,6 +2216,7 @@ function renderStep() {
 
       window._lastStepCandles = d.candles;
       cs.setData(d.candles);
+      try { if (isPlaying && markerHandle) markerHandle.setMarkers(d.markers || []); } catch (e) {}
       vs.setData(d.volumes);
 
       if (d.ma) {

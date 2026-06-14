@@ -336,8 +336,8 @@ def validate_expression(expr):
             "prev_trendline_slope": 0.4,
         }
         dummy_funcs = {
-            "crossover": lambda a, b: a > b,
-            "crossunder": lambda a, b: a < b,
+            "crossover": lambda *a: bool(a and a[0]),
+            "crossunder": lambda *a: bool(a and a[0]),
             "abs": abs,
             "min": min,
             "max": max,
@@ -1319,6 +1319,7 @@ def calculate_non_repaint_zigzag(highs, lows, closes, dev_pct=5.0, **kwargs):
     confirmed pivot to the current running extreme is returned as 'unconfirmed'.
     Extra kwargs (depth/atr_*) are accepted and ignored for API compatibility.
     """
+    highs, lows = closes, closes  # Kiwoom 0601: 종가 기준 ZigZag
     n = len(highs)
     if n < 2:
         return [], None

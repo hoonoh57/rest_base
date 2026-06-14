@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 core.py — 불변 구조 (90%)
@@ -355,6 +355,7 @@ def compute_zigzag_state_series(highs, lows, closes, dev_pct=5.0):
     highs = np.asarray(highs, dtype=float)
     lows = np.asarray(lows, dtype=float)
     closes = np.asarray(closes, dtype=float)
+    highs = closes; lows = closes  # Kiwoom 0601: 종가 기준 ZigZag
     n = len(closes)
 
     trend = np.zeros(n, dtype=int)
@@ -1187,21 +1188,17 @@ class StrategyEngine:
         v["trendline"] = float(trendline[i]) if trendline is not None and i < len(trendline) and not np.isnan(trendline[i]) else None
         v["trendline_slope"] = float(trendline_slope[i]) if trendline_slope is not None and i < len(trendline_slope) and not np.isnan(trendline_slope[i]) else None
 
-        if prev:
-            for key, value in prev.items():
-                if key.startswith("prev_"):
-                    continue
-                v["prev_" + key] = value
+        for key in [k for k in list(v.keys()) if not k.startswith("prev_")]:
+            v["prev_" + key] = prev.get(key, v[key]) if prev else v[key]
         return v
 
     def _funcs(self, cur, prv):
         """직전봉(prv) 기준 정확한 교차 판정."""
-        def crossover(a, b):
-            return a > b and prv.get("_a", a) <= prv.get("_b", b)
-        def crossunder(a, b):
-            return a < b and prv.get("_a", a) >= prv.get("_b", b)
-        # 단순화: 인자 자체로 현재>직전 비교가 어려우므로 macd 교차에 한정 사용 권장
-        return {"crossover": lambda a, b: a > b, "crossunder": lambda a, b: a < b,
+        def crossover(cur_a, prev_a, cur_b, prev_b):
+            return cur_a > cur_b and prev_a <= prev_b
+        def crossunder(cur_a, prev_a, cur_b, prev_b):
+            return cur_a < cur_b and prev_a >= prev_b
+        return {"crossover": crossover, "crossunder": crossunder,
                 "abs": abs, "min": min, "max": max}
 
     def backtest(self, code, tf="D", strategy=None, fee=0.0015):
